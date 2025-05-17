@@ -1,85 +1,132 @@
 using UnityEditor;
 using UnityEngine;
+using System;
 using System.IO;
-using System.Collections.Generic;
-using UnityEditor.Build.Reporting; // Ajout pour BuildReport, BuildSummary et BuildResult
+using System.Diagnostics;
+using Debug = UnityEngine.Debug;
 
 public class BuildScript
 {
-    [MenuItem("Build/Android")]
     public static void Build()
     {
-        try {
-            Debug.Log("Configuration de la build pour Android...");
+        try
+        {
+            Debug.Log("Démarrage du build Android...");
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
             
-            // Désactivation du keystore personnalisé
-            PlayerSettings.Android.useCustomKeystore = false;
+            // Vérifier et créer le dossier de build
+            string buildPath = "Builds";
+            if (!Directory.Exists(buildPath))
+            {
+                Directory.CreateDirectory(buildPath);
+            }
             
-            // Appel à la configuration
+            // Assurer que les paramètres Android sont correctement configurés
             SetupAndroidBuild.Configure();
             
-            // Configuration des scènes
-            List<string> enabledScenes = new List<string>();
-            foreach (EditorBuildSettingsScene scene in EditorBuildSettings.scenes)
+            // Générer un nom de fichier avec timestamp
+            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string apkName = $"{PlayerSettings.productName}_{PlayerSettings.bundleVersion}_{timestamp}.apk";
+            string apkPath = Path.Combine(buildPath, apkName);
+            
+            // Vérifier si les scènes sont bien configurées
+            if (EditorBuildSettings.scenes.Length == 0)
             {
-                if (scene.enabled)
-                {
-                    enabledScenes.Add(scene.path);
-                    Debug.Log("Scene incluse: " + scene.path);
-                }
+                throw new Exception("Aucune scène n'est configurée pour le build!");
             }
             
-            // Si aucune scène n'est activée, chercher toutes les scènes disponibles
-            if (enabledScenes.Count == 0)
+            // Options de build avec compression optimisée
+            BuildPlayerOptions buildPlayerOptions = new BuildPlayerOptions
             {
-                Debug.Log("Aucune scène active trouvée, recherche de toutes les scènes...");
-                foreach (var sceneGUID in AssetDatabase.FindAssets("t:scene"))
-                {
-                    string scenePath = AssetDatabase.GUIDToAssetPath(sceneGUID);
-                    enabledScenes.Add(scenePath);
-                    Debug.Log("Scene ajoutée: " + scenePath);
-                }
+                scenes = GetEnabledScenePaths(),
+                locationPathName = apkPath,
+                target = BuildTarget.Android,
+                options = BuildOptions.CompressWithLz4HC
+            };
+            
+            // Activer le mode développeur si nécessaire (pour le débogage)
+            bool developmentBuild = Environment.GetEnvironmentVariable("DEVELOPMENT_BUILD") == "true";
+            if (developmentBuild)
+            {
+                buildPlayerOptions.options |= BuildOptions.Development;
+                buildPlayerOptions.options |= BuildOptions.ConnectWithProfiler;
+                Debug.Log("Mode développement activé pour ce build");
             }
             
-            // Vérification des scènes
-            if (enabledScenes.Count == 0)
-            {
-                Debug.LogError("Aucune scène trouvée pour la build!");
-                return;
-            }
-            
-            // Création du dossier de build
-            string buildPath = Path.Combine(Directory.GetCurrentDirectory(), "Builds");
-            if (!Directory.Exists(buildPath))
-                Directory.CreateDirectory(buildPath);
-                
-            string apkPath = Path.Combine(buildPath, "CloudBeesDemo.apk");
-            Debug.Log("Chemin de l'APK: " + apkPath);
-            
-            // Options de build
-            BuildPlayerOptions buildPlayerOptions = new BuildPlayerOptions();
-            buildPlayerOptions.scenes = enabledScenes.ToArray();
-            buildPlayerOptions.locationPathName = apkPath;
-            buildPlayerOptions.target = BuildTarget.Android;
-            buildPlayerOptions.options = BuildOptions.None;
-            
-            // Lancement de la build
-            Debug.Log("Démarrage de la build Android...");
+            // Exécuter le build
+            Debug.Log($"Début du build vers: {apkPath}");
             BuildReport report = BuildPipeline.BuildPlayer(buildPlayerOptions);
             BuildSummary summary = report.summary;
             
+            // Analyser le résultat du build
+            stopwatch.Stop();
             if (summary.result == BuildResult.Succeeded)
             {
-                Debug.Log("Build réussie! Temps: " + summary.totalTime + " Taille: " + summary.totalSize + " bytes");
+                Debug.Log($"Build réussi en {stopwatch.Elapsed.TotalMinutes:F2} minutes!");
+                Debug.Log($"Taille du build: {summary.totalSize / 1048576.0f:F2} MB");
+                Debug.Log($"Warnings: {summary.totalWarnings}");
+                
+                // Créer un fichier manifeste avec les informations du build
+                CreateBuildManifest(apkPath, summary, stopwatch.Elapsed);
             }
             else
             {
-                Debug.LogError("La build a échoué: " + summary.result);
+                throw new Exception($"Build échoué avec le statut: {summary.result}, erreurs: {summary.totalErrors}");
             }
         }
-        catch (System.Exception ex)
+        catch (Exception e)
         {
-            Debug.LogError("Erreur lors de la build: " + ex.ToString());
+            Debug.LogError($"Erreur de build: {e.Message}\n{e.StackTrace}");
+            EditorApplication.Exit(1);
         }
+    }
+    
+    // Génère le manifeste du build avec des informations détaillées
+    private static void CreateBuildManifest(string apkPath, BuildSummary summary, TimeSpan buildTime)
+    {
+        string manifestPath = Path.Combine("Builds", "build_manifest.json");
+        string json = $@"{{
+            ""buildDate"": ""{DateTime.Now}"",
+            ""buildDuration"": ""{buildTime.TotalMinutes:F2} minutes"",
+            ""productName"": ""{PlayerSettings.productName}"",
+            ""bundleVersion"": ""{PlayerSettings.bundleVersion}"",
+            ""bundleVersionCode"": {PlayerSettings.Android.bundleVersionCode},
+            ""unityVersion"": ""{Application.unityVersion}"",
+            ""buildSize"": ""{summary.totalSize / 1048576.0f:F2} MB"",
+            ""warnings"": {summary.totalWarnings},
+            ""errors"": {summary.totalErrors},
+            ""outputPath"": ""{apkPath.Replace("\\", "\\\\")}"",
+            ""sceneCount"": {EditorBuildSettings.scenes.Length}
+        }}";
+        
+        File.WriteAllText(manifestPath, json);
+        Debug.Log($"Manifeste du build créé à: {manifestPath}");
+    }
+    
+    // Récupère les chemins des scènes activées
+    private static string[] GetEnabledScenePaths()
+    {
+        var scenes = EditorBuildSettings.scenes;
+        var enabledScenes = new System.Collections.Generic.List<string>();
+        
+        foreach (var scene in scenes)
+        {
+            if (scene.enabled)
+            {
+                enabledScenes.Add(scene.path);
+            }
+        }
+        
+        if (enabledScenes.Count == 0)
+        {
+            Debug.LogWarning("Aucune scène activée trouvée. Utilisation de toutes les scènes disponibles.");
+            foreach (var scene in scenes)
+            {
+                enabledScenes.Add(scene.path);
+            }
+        }
+        
+        return enabledScenes.ToArray();
     }
 }
