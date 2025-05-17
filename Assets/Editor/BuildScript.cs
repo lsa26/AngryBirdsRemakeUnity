@@ -56,23 +56,22 @@ public class BuildScript
             
             // Exécuter le build
             Debug.Log($"Début du build vers: {apkPath}");
-            BuildReport report = BuildPipeline.BuildPlayer(buildPlayerOptions);
-            BuildSummary summary = report.summary;
+            var report = BuildPipeline.BuildPlayer(buildPlayerOptions);
             
             // Analyser le résultat du build
             stopwatch.Stop();
-            if (summary.result == BuildResult.Succeeded)
+            if (report.summary.result == UnityEditor.Build.Reporting.BuildResult.Succeeded)
             {
                 Debug.Log($"Build réussi en {stopwatch.Elapsed.TotalMinutes:F2} minutes!");
-                Debug.Log($"Taille du build: {summary.totalSize / 1048576.0f:F2} MB");
-                Debug.Log($"Warnings: {summary.totalWarnings}");
+                Debug.Log($"Taille du build: {report.summary.totalSize / 1048576.0f:F2} MB");
+                Debug.Log($"Warnings: {report.summary.totalWarnings}");
                 
                 // Créer un fichier manifeste avec les informations du build
-                CreateBuildManifest(apkPath, summary, stopwatch.Elapsed);
+                CreateBuildManifest(apkPath, report.summary, stopwatch.Elapsed);
             }
             else
             {
-                throw new Exception($"Build échoué avec le statut: {summary.result}, erreurs: {summary.totalErrors}");
+                throw new Exception($"Build échoué avec le statut: {report.summary.result}, erreurs: {report.summary.totalErrors}");
             }
         }
         catch (Exception e)
@@ -83,7 +82,7 @@ public class BuildScript
     }
     
     // Génère le manifeste du build avec des informations détaillées
-    private static void CreateBuildManifest(string apkPath, BuildSummary summary, TimeSpan buildTime)
+    private static void CreateBuildManifest(string apkPath, UnityEditor.Build.Reporting.BuildSummary summary, TimeSpan buildTime)
     {
         string manifestPath = Path.Combine("Builds", "build_manifest.json");
         string json = $@"{{
