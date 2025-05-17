@@ -1,0 +1,52 @@
+apiVersion: automation.cloudbees.io/v1alpha1
+kind: workflow
+name: Unity Android Build
+
+on:
+  push:
+    branches:
+      - 'main'
+
+jobs:
+  build-android:
+    steps:
+      - name: Checkout
+        uses: cloudbees-io/checkout@v1
+
+      - name: Build Unity (Android)
+        uses: docker://unityci/editor:ubuntu-2022.3.15f1-android-0.16.1
+        shell: sh
+        run: |
+          mkdir -p Builds Assets/Editor
+          echo "🔧 Lancement du build Unity Android..."
+          unity-editor \
+            -batchmode -nographics -logFile unity_build.log \
+            -projectPath . \
+            -executeMethod BuildScript.Build \
+            -quit || (cat unity_build.log && exit 1)
+
+      - name: Archive build output
+        uses: docker://alpine:3.18
+        shell: sh
+        run: |
+          mkdir -p BuildArtifacts
+          cp Builds/*.apk BuildArtifacts/ || true
+          cp Builds/build_manifest.json BuildArtifacts/ || true
+          tar -czf builds.tar.gz -C BuildArtifacts .
+
+      - name: Upload build artifacts
+        uses: cloudbees-io/artifact@v1
+        with:
+          name: android-build
+          path: builds.tar.gz
+
+      - name: Analyse performances
+        uses: docker://alpine:3.18
+        shell: sh
+        run: |
+          apk add --no-cache coreutils grep || true
+          echo "-------- Rapport --------"
+          date
+          grep "Build réussi en" unity_build.log || true
+          grep "Taille du build:" unity_build.log || true
+          du -sh Library || true
