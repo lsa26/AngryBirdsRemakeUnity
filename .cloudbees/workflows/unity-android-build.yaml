@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Checkout
         uses: cloudbees-io/checkout@v1
-
+        
       - name: Build Unity (Android)
         uses: docker://unityci/editor:ubuntu-2022.3.15f1-android-0.16.1
         shell: sh
@@ -25,7 +25,7 @@ jobs:
             -projectPath . \
             -executeMethod BuildScript.Build \
             -quit || (cat unity_build.log && exit 1)
-
+        
       - name: Archive build output
         uses: docker://alpine:3.18
         shell: sh
@@ -34,14 +34,13 @@ jobs:
           cp Builds/*.apk BuildArtifacts/ || true
           cp Builds/build_manifest.json BuildArtifacts/ || true
           tar -czf builds.tar.gz -C BuildArtifacts .
-
+        
       - name: Upload build artifact (APK archive)
-        uses: calculi-corp/assets-plugin-chain-utils/upload-binary@v1
+        uses: cloudbees-io/upload-artifact@v1
         with:
-          file-path: builds.tar.gz
-          file-type: BINARY_CONTAINER
-          debug: "true"
-
+          name: android-build
+          path: builds.tar.gz
+        
       - name: Analyse performances
         uses: docker://alpine:3.18
         shell: sh
