@@ -35,19 +35,3 @@ jobs:
           cp Builds/build_manifest.json BuildArtifacts/ || true
           tar -czf builds.tar.gz -C BuildArtifacts .
         
-      - name: Upload build artifact (APK archive)
-        uses: cloudbees-io/upload-artifact@v1
-        with:
-          name: android-build
-          path: builds.tar.gz
-        
-      - name: Analyse performances
-        uses: docker://alpine:3.18
-        shell: sh
-        run: |
-          apk add --no-cache coreutils grep || true
-          echo "-------- Rapport --------"
-          date
-          grep "Build réussi en" unity_build.log || true
-          grep "Taille du build:" unity_build.log || true
-          du -sh Library || true
