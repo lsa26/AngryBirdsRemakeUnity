@@ -15,7 +15,7 @@ jobs:
         uses: cloudbees-io/checkout@v1
         
       - name: Build Unity (Android)
-        uses: docker://unityci/editor:ubuntu-2022.3.15f1-android-0.16.1
+        uses: docker://unityci/editor:latest
         shell: sh
         run: |
           mkdir -p Builds Assets/Editor
