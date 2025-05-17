@@ -1,45 +1,41 @@
-apiVersion: automation.cloudbees.io/v1alpha1
-kind: Workflow
-metadata:
-  name: unity-android-build
-spec:
-  on:
-    push:
-      branches:
-        - main
-    workflow_dispatch: {}
+name: Unity Android Build
 
-  jobs:
-    build-android:
-      runsOn:
-        - ubuntu-latest
-      steps:
-        - name: Checkout
-          uses: cloudbees-io/checkout@v1
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
-        - name: Build Unity (Android)
-          uses: docker://unityci/editor:latest
-          shell: sh
-          run: |
-            mkdir -p Builds Assets/Editor
-            echo "🔧 Lancement du build Unity Android..."
-            unity-editor \
-              -batchmode -nographics -logFile unity_build.log \
-              -projectPath . \
-              -executeMethod BuildScript.Build \
-              -quit || (cat unity_build.log && exit 1)
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: cloudbees-io/checkout@v1
 
-        - name: Archive build output
-          uses: docker://alpine:3.18
-          shell: sh
-          run: |
-            mkdir -p BuildArtifacts
-            cp Builds/*.apk BuildArtifacts/ || true
-            cp Builds/build_manifest.json BuildArtifacts/ || true
-            tar -czf builds.tar.gz -C BuildArtifacts .
-          
-        - name: Upload artifacts
-          uses: cloudbees-io/upload-artifact@v1
-          with:
-            name: unity-android-apk
-            path: builds.tar.gz
+      - name: Build Unity (Android)
+        uses: docker://unityci/editor:latest
+        shell: sh
+        run: |
+          mkdir -p Builds Assets/Editor
+          echo "🔧 Lancement du build Unity Android..."
+          unity-editor \
+            -batchmode -nographics -logFile unity_build.log \
+            -projectPath . \
+            -executeMethod BuildScript.Build \
+            -quit || (cat unity_build.log && exit 1)
+
+      - name: Archive build output
+        uses: docker://alpine:3.18
+        shell: sh
+        run: |
+          mkdir -p BuildArtifacts
+          cp Builds/*.apk BuildArtifacts/ || true
+          cp Builds/build_manifest.json BuildArtifacts/ || true
+          tar -czf builds.tar.gz -C BuildArtifacts .
+
+      - name: Upload artifact
+        uses: cloudbees-io/upload-artifact@v1
+        with:
+          name: unity-android-apk
+          path: builds.tar.gz
