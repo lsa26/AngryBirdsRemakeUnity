@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - 'main'
+  workflow_dispatch:
 
 jobs:
   build-android:
@@ -34,11 +35,12 @@ jobs:
           cp Builds/build_manifest.json BuildArtifacts/ || true
           tar -czf builds.tar.gz -C BuildArtifacts .
 
-      - name: Upload build artifacts
-        uses: cloudbees-io/artifact@v1
+      - name: Upload build artifact (APK archive)
+        uses: calculi-corp/assets-plugin-chain-utils/upload-binary@v1
         with:
-          name: android-build
-          path: builds.tar.gz
+          file-path: builds.tar.gz
+          file-type: BINARY_CONTAINER
+          debug: "true"
 
       - name: Analyse performances
         uses: docker://alpine:3.18
