@@ -1,91 +1,84 @@
 using UnityEditor;
-using UnityEngine;
-using System;
-using System.IO;
-using System.Text;
-using UnityEditor.Build.Reporting;
-using System.Diagnostics;
+          using UnityEngine;
+          using System.Collections.Generic;
+          using System.IO;
+          using System;
 
-public class BuildScript
-{
-    private static string[] GetScenePaths()
-    {
-        string[] scenes = new string[EditorBuildSettings.scenes.Length];
-        for (int i = 0; i < scenes.Length; i++)
-        {
-            scenes[i] = EditorBuildSettings.scenes[i].path;
-        }
-        return scenes;
-    }
+          public class BuildScript
+          {
+              static string[] GetScenePaths()
+              {
+                  // Trouver toutes les scènes dans Assets/Scenes
+                  List<string> scenes = new List<string>();
 
-    public static void Build()
-    {
-        EditorUserBuildSettings.development = false;
-        EditorUserBuildSettings.androidBuildSystem = AndroidBuildSystem.Gradle;
-        EditorUserBuildSettings.buildAppBundle = false;
-        EditorUserBuildSettings.allowDebugging = false;
+                  // Ajouter explicitement les scènes que nous avons identifié
+                  scenes.Add("Assets/Scenes/MainMenu.unity");
+                  scenes.Add("Assets/Scenes/Level1.unity");
+                  scenes.Add("Assets/Scenes/Level2.unity");
 
-        Stopwatch stopwatch = new Stopwatch();
-        stopwatch.Start();
+                  // Afficher les scènes trouvées dans le log
+                  Debug.Log("Scènes incluses dans le build:");
+                  foreach (string scene in scenes)
+                  {
+                      Debug.Log("- " + scene);
+                  }
 
-        string buildPath = Path.Combine(Directory.GetCurrentDirectory(), "Builds");
-        Directory.CreateDirectory(buildPath);
+                  return scenes.ToArray();
+              }
 
-        string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-        string apkName = $"AngryBirdsRemake_{timestamp}.apk";
-        string apkPath = Path.Combine(buildPath, apkName);
-
-        BuildPlayerOptions buildPlayerOptions = new BuildPlayerOptions
-        {
-            scenes = GetScenePaths(),
-            locationPathName = apkPath,
-            target = BuildTarget.Android,
-            options = BuildOptions.None
-        };
-
-        UnityEngine.Debug.Log($"Démarrage du build vers {apkPath}...");
-        var report = BuildPipeline.BuildPlayer(buildPlayerOptions);
-
-        CreateBuildManifest(apkPath, report.summary);
-
-        stopwatch.Stop();
-        TimeSpan ts = stopwatch.Elapsed;
-        string elapsedTime = String.Format("{0:00}:{1:00}:{2:00}.{3:00}", ts.Hours, ts.Minutes, ts.Seconds, ts.Milliseconds / 10);
-
-        if (report.summary.result == BuildResult.Succeeded)
-        {
-            FileInfo fileInfo = new FileInfo(apkPath);
-            float fileSizeMB = fileInfo.Length / (1024f * 1024f);
-
-            UnityEngine.Debug.Log($"Build réussi en {elapsedTime}");
-            UnityEngine.Debug.Log($"Taille du build: {fileSizeMB:F2} MB");
-            UnityEngine.Debug.Log($"Chemin du build: {apkPath}");
-        }
-        else
-        {
-            UnityEngine.Debug.LogError($"Build échoué après {elapsedTime}: {report.summary.result}");
-        }
-    }
-
-    private static void CreateBuildManifest(string apkPath, UnityEditor.Build.Reporting.BuildSummary summary)
-    {
-        string manifestPath = Path.Combine(Path.GetDirectoryName(apkPath), "build_manifest.json");
-
-        StringBuilder jsonBuilder = new StringBuilder();
-        jsonBuilder.AppendLine("{");
-        jsonBuilder.AppendLine($"  \"buildDate\": \"{DateTime.Now:yyyy-MM-dd HH:mm:ss}\"");
-        jsonBuilder.AppendLine($", \"buildResult\": \"{summary.result}\"");
-        jsonBuilder.AppendLine($", \"buildPath\": \"{apkPath}\"");
-        jsonBuilder.AppendLine($", \"totalErrors\": {summary.totalErrors}");
-        jsonBuilder.AppendLine($", \"totalWarnings\": {summary.totalWarnings}");
-        jsonBuilder.AppendLine($", \"unityVersion\": \"{Application.unityVersion}\"");
-        jsonBuilder.AppendLine($", \"productName\": \"{PlayerSettings.productName}\"");
-        jsonBuilder.AppendLine($", \"bundleIdentifier\": \"{PlayerSettings.applicationIdentifier}\"");
-        jsonBuilder.AppendLine($", \"version\": \"{PlayerSettings.bundleVersion}\"");
-        jsonBuilder.AppendLine($", \"buildNumber\": \"{PlayerSettings.Android.bundleVersionCode}\"");
-        jsonBuilder.AppendLine("}");
-
-        File.WriteAllText(manifestPath, jsonBuilder.ToString());
-        UnityEngine.Debug.Log($"Manifeste de build créé à {manifestPath}");
-    }
-}
+              [MenuItem("Build/Build Android")]
+              public static void BuildAndroid()
+              {
+                  Debug.Log("Démarrage du build Android...");
+                  
+                  // Configurer les paramètres Android
+                  PlayerSettings.Android.keystorePass = "";
+                  PlayerSettings.Android.keyaliasPass = "";
+                  
+                  // Définir un bundle ID valide
+                  PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Android, "com.yourgame.angrybirdsremake");
+                  
+                  // Configurer la version minimale
+                  PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel22;
+                  
+                  // Définir le chemin de sortie
+                  string buildPath = Path.Combine(Application.dataPath, "../Builds/Android/AngryBirdsRemake.apk");
+                  
+                  // Créer le répertoire s'il n'existe pas
+                  Directory.CreateDirectory(Path.GetDirectoryName(buildPath));
+                  
+                  // Options de build
+                  BuildPlayerOptions buildPlayerOptions = new BuildPlayerOptions
+                  {
+                      scenes = GetScenePaths(),
+                      locationPathName = buildPath,
+                      target = BuildTarget.Android,
+                      options = BuildOptions.None
+                  };
+                  
+                  // Afficher la configuration
+                  Debug.Log("Chemin de build: " + buildPath);
+                  Debug.Log("Nombre de scènes: " + buildPlayerOptions.scenes.Length);
+                  
+                  // Lancer le build
+                  BuildReport report = BuildPipeline.BuildPlayer(buildPlayerOptions);
+                  BuildSummary summary = report.summary;
+                  
+                  // Afficher les résultats
+                  Debug.Log("Résultat du build: " + summary.result);
+                  Debug.Log("Taille du build: " + summary.totalSize + " bytes");
+                  Debug.Log("Temps total: " + summary.totalTime.TotalSeconds + " secondes");
+                  
+                  // Vérifier si le build a réussi
+                  if (summary.result == BuildResult.Succeeded)
+                  {
+                      Debug.Log("Build réussi: " + buildPath);
+                      EditorApplication.Exit(0);
+                  }
+                  else
+                  {
+                      Debug.LogError("Build échoué!");
+                      EditorApplication.Exit(1);
+                  }
+              }
+          }
