@@ -19,7 +19,7 @@ jobs:
       
       # Utiliser l'approche du Game CI avec la syntaxe correcte pour CloudBees
       - name: Build with Unity using GameCI
-        uses: docker://game-ci/unity-builder:ubuntu-2020.1.17f1-android-0.17.0
+        uses: docker://unityci/editor:ubuntu-2020.1.1f1-android-0.3.0
         shell: bash
         run: |
           # Afficher la version de l'image
