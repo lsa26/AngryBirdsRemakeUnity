@@ -21,31 +21,28 @@ jobs:
         uses: docker://gableroux/unity3d:2020.1.1f1-android
         shell: bash
         run: |
-          # Définir les variables d'environnement nécessaires
-          export UNITY_LICENSE_CONTENT=$UNITY_LICENSE
-          export UNITY_USERNAME=$UNITY_USERNAME
-          export UNITY_PASSWORD=$UNITY_PASSWORD
+          # Créer un répertoire pour les builds
+          mkdir -p "${CLOUDBEES_WORKSPACE}/Builds/Android"
           
-          # Activer la licence Unity (peut être nécessaire selon l'image)
-          echo "Activation de la licence Unity..."
-          echo "$UNITY_LICENSE_CONTENT" > /tmp/unity3d.ulf
+          # Activer Unity en mode personnel (sans license file)
+          echo "Configuration de Unity en licence personnelle..."
           xvfb-run --auto-servernum --server-args='-screen 0 640x480x24' \
-            /opt/Unity/Editor/Unity -batchmode -nographics -logFile /tmp/unity-activation.log \
-            -quit -manualLicenseFile /tmp/unity3d.ulf || true
+            /opt/Unity/Editor/Unity \
+              -batchmode \
+              -createManualActivationFile \
+              -logFile /tmp/unity-manual-activation.log \
+              -quit
           
           # Afficher la structure du projet
           echo "Structure du projet Unity :"
           find "${CLOUDBEES_WORKSPACE}" -type f -name "*.unity" | sort
-          find "${CLOUDBEES_WORKSPACE}" -type f -name "*.cs" | grep "Editor" | sort
-          
-          # Création des répertoires nécessaires
-          mkdir -p "${CLOUDBEES_WORKSPACE}/Builds/Android"
           
           # Effectuer le build avec xvfb pour émuler un écran
           echo "Démarrage du build Unity..."
           xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' \
             /opt/Unity/Editor/Unity \
               -batchmode \
+              -nographics \
               -projectPath "${CLOUDBEES_WORKSPACE}" \
               -logFile "${CLOUDBEES_WORKSPACE}/unity_build.log" \
               -executeMethod BuildScript.Build \
@@ -68,10 +65,6 @@ jobs:
           
           # Retourner le code de sortie du build
           exit $BUILD_RESULT
-        env:
-          UNITY_LICENSE: ${{secrets.UNITY_LICENSE}}
-          UNITY_USERNAME: ${{secrets.UNITY_USERNAME}}
-          UNITY_PASSWORD: ${{secrets.UNITY_PASSWORD}}
 
       - name: Archive Build
         uses: docker://ubuntu:20.04
