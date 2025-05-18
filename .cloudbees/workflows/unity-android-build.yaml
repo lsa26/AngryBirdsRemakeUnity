@@ -1,43 +1,70 @@
 apiVersion: automation.cloudbees.io/v1alpha1
 kind: workflow
-name: Unity Android Build
+name: unity-android-build
 
 on:
   push:
     branches:
-      - main
-  workflow_dispatch:
+      - 'main'
+  workflow_dispatch:  # Permet de lancer manuellement le workflow
 
 jobs:
-  build-android:
-    runs-on: ubuntu-latest
+  build:
     steps:
       - name: Checkout
-        uses: cloudbees-io/checkout@v1
-
-      - name: Build Unity (Android)
-        uses: docker://unityci/editor:latest
-        shell: sh
-        run: |
-          mkdir -p Builds Assets/Editor
-          echo "🔧 Lancement du build Unity Android..."
-          unity-editor \
-            -batchmode -nographics -logFile unity_build.log \
-            -projectPath . \
-            -executeMethod BuildScript.Build \
-            -quit || (cat unity_build.log && exit 1)
-
-      - name: Archive build output
-        uses: docker://alpine:3.18
-        shell: sh
-        run: |
-          mkdir -p BuildArtifacts
-          cp Builds/*.apk BuildArtifacts/ || true
-          cp Builds/build_manifest.json BuildArtifacts/ || true
-          tar -czf builds.tar.gz -C BuildArtifacts .
-
-      - name: Upload artifact
-        uses: cloudbees-io/upload-artifact@v1
+        uses: https://github.com/cloudbees-io/checkout@v1
         with:
-          name: unity-android-apk
-          path: builds.tar.gz
+          repository: lsa26/AngryBirdsRemakeUnity
+          ref: main
+
+      - name: Verify scripts
+        uses: docker://ubuntu:20.04
+        shell: bash
+        run: |
+          echo "Vérification des scripts dans le repo..."
+          ls -la "${CLOUDBEES_WORKSPACE}/Assets/Editor/"
+          test -f "${CLOUDBEES_WORKSPACE}/Assets/Editor/BuildScript.cs" || { echo "BuildScript.cs manquant!"; exit 1; }
+          test -f "${CLOUDBEES_WORKSPACE}/Assets/Editor/SetupAndroidBuild.cs" || { echo "SetupAndroidBuild.cs manquant!"; exit 1; }
+
+      - name: Build Android with Unity
+        uses: docker://unityci/editor:ubuntu-2020.1.1f1-android-0.3.0
+        shell: bash
+        run: |
+          # Configuration de Unity
+          unity-editor \
+            -quit \
+            -batchmode \
+            -projectPath "${CLOUDBEES_WORKSPACE}" \
+            -executeMethod BuildScript.Build \
+            -logFile unity_build.log
+          
+          if [ $? -ne 0 ]; then
+              echo "Build failed! Showing log:"
+              cat unity_build.log || echo "Log not found"
+              exit 1
+          fi
+          
+          echo "Build log:"
+          cat unity_build.log || echo "Log file not found"
+          
+          # Vérifie si le build a généré un APK
+          if [ ! -d "${CLOUDBEES_WORKSPACE}/Builds" ]; then
+              echo "Le dossier Builds n'existe pas!"
+              exit 1
+          fi
+          
+          ls -la "${CLOUDBEES_WORKSPACE}/Builds/"
+      
+      - name: Upload APK artifacts
+        id: upload-apk
+        uses: https://github.com/cloudbees-io/file-upload-action@v1
+        with:
+          path: Builds/*.apk
+          name: android-build
+          
+      - name: Upload log artifacts
+        id: upload-logs
+        uses: https://github.com/cloudbees-io/file-upload-action@v1
+        with:
+          path: unity_build.log
+          name: build-logs
