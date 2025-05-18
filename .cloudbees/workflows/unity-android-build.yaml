@@ -25,18 +25,12 @@ jobs:
           mkdir -p "${CLOUDBEES_WORKSPACE}/Builds"
           mkdir -p "${CLOUDBEES_WORKSPACE}/Temp"
           mkdir -p "${CLOUDBEES_WORKSPACE}/Library"
-          
-          # Vérification des scripts
-          echo "Vérification des scripts dans le repo..."
-          ls -la "${CLOUDBEES_WORKSPACE}/Assets/Editor/" || echo "Dossier Editor non trouvé"
-          test -f "${CLOUDBEES_WORKSPACE}/Assets/Editor/BuildScript.cs" || { echo "BuildScript.cs manquant!"; exit 1; }
-          test -f "${CLOUDBEES_WORKSPACE}/Assets/Editor/SetupAndroidBuild.cs" || { echo "SetupAndroidBuild.cs manquant!"; exit 1; }
-          
-          # Afficher l'espace disponible et utilisé
-          df -h
-          
-          # Afficher les permissions du répertoire de travail
-          ls -la "${CLOUDBEES_WORKSPACE}"
+          # Réparer les permissions
+          chmod -R 777 "${CLOUDBEES_WORKSPACE}"
+          # Vérifier que Unity a accès aux dossiers temporaires
+          mkdir -p /tmp/unity_runtime
+          chmod 777 /tmp/unity_runtime 
+        
 
       - name: Build with Unity
         uses: docker://unityci/editor:ubuntu-2020.1.1f1-android-0.3.0
