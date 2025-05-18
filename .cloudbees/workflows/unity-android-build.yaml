@@ -98,9 +98,6 @@ jobs:
       - name: Build with Unity
         uses: docker://unityci/editor:ubuntu-2020.1.1f1-android-0.3.0
         shell: bash
-        with:
-          resources:
-            memory: 8Gi  # Augmenter la mémoire allouée
         run: |
           # Configuration de l'environnement
           export XDG_RUNTIME_DIR="/tmp/unity_runtime"
