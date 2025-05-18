@@ -1,0 +1,245 @@
+name: Unity Build Android
+description: Build a Unity project for Android platform
+branding:
+  icon: box
+  color: orange
+
+inputs:
+  repository:
+    description: 'GitHub repository with Unity project'
+    required: true
+    default: 'lsa26/AngryBirdsRemakeUnity'
+  ref:
+    description: 'Git reference (branch, tag, or SHA)'
+    required: false
+    default: 'main'
+  unity_version:
+    description: 'Unity version to use'
+    required: false
+    default: 'ubuntu-2020.1.1f1-android-0.3.0'
+  build_target:
+    description: 'Build target platform'
+    required: false
+    default: 'Android'
+  output_name:
+    description: 'Output APK name'
+    required: false
+    default: 'Game.apk'
+  scenes:
+    description: 'Comma-separated list of scenes to include'
+    required: false
+    default: 'Assets/Scenes/MainMenu.unity,Assets/Scenes/Level1.unity,Assets/Scenes/Level2.unity'
+  bundle_id:
+    description: 'Android bundle identifier'
+    required: false
+    default: 'com.yourgame.angrybirdsremake'
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout Repository
+      uses: https://github.com/cloudbees-io/checkout@v1
+      with:
+        repository: ${{ inputs.repository }}
+        ref: ${{ inputs.ref }}
+        
+    - name: Create Build Script
+      shell: bash
+      run: |
+        # Créer le répertoire Editor s'il n'existe pas
+        mkdir -p "${CLOUDBEES_WORKSPACE}/Assets/Editor"
+        
+        # Créer le script de build Unity
+        cat > "${CLOUDBEES_WORKSPACE}/Assets/Editor/AutoBuildScript.cs" << 'EOF'
+        using UnityEditor;
+        using UnityEngine;
+        using System.Collections.Generic;
+        using System.IO;
+        using System;
+        using System.Linq;
+
+        public class AutoBuildScript
+        {
+            [MenuItem("Build/Build Android")]
+            public static void BuildAndroid()
+            {
+                try {
+                    Debug.Log("Démarrage du build Android...");
+                    
+                    // Récupérer les paramètres d'environnement
+                    string outputName = GetEnvironmentVariable("OUTPUT_NAME", "Game.apk");
+                    string bundleId = GetEnvironmentVariable("BUNDLE_ID", "com.yourgame.angrybirdsremake");
+                    string scenesInput = GetEnvironmentVariable("SCENES", "");
+                    
+                    // Configurer les paramètres Android
+                    PlayerSettings.Android.keystorePass = "";
+                    PlayerSettings.Android.keyaliasPass = "";
+                    
+                    // Définir un bundle ID valide
+                    PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Android, bundleId);
+                    
+                    // Configurer la version minimale
+                    PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel22;
+                    
+                    // Préparer le chemin de sortie
+                    string buildPath = Path.Combine(Application.dataPath, "../Builds/Android", outputName);
+                    
+                    // Créer le répertoire s'il n'existe pas
+                    Directory.CreateDirectory(Path.GetDirectoryName(buildPath));
+                    
+                    // Déterminer les scènes à inclure
+                    string[] scenePaths = GetScenePaths(scenesInput);
+                    
+                    // Options de build
+                    BuildPlayerOptions buildPlayerOptions = new BuildPlayerOptions
+                    {
+                        scenes = scenePaths,
+                        locationPathName = buildPath,
+                        target = BuildTarget.Android,
+                        options = BuildOptions.None
+                    };
+                    
+                    // Afficher la configuration
+                    Debug.Log("Chemin de build: " + buildPath);
+                    Debug.Log("Bundle ID: " + bundleId);
+                    Debug.Log("Nombre de scènes: " + buildPlayerOptions.scenes.Length);
+                    
+                    // Lancer le build
+                    BuildReport report = BuildPipeline.BuildPlayer(buildPlayerOptions);
+                    BuildSummary summary = report.summary;
+                    
+                    // Afficher les résultats
+                    Debug.Log("Résultat du build: " + summary.result);
+                    Debug.Log("Taille du build: " + summary.totalSize + " bytes");
+                    Debug.Log("Temps total: " + summary.totalTime.TotalSeconds + " secondes");
+                    
+                    // Vérifier si le build a réussi
+                    if (summary.result == BuildResult.Succeeded)
+                    {
+                        Debug.Log("Build réussi: " + buildPath);
+                        EditorApplication.Exit(0);
+                    }
+                    else
+                    {
+                        Debug.LogError("Build échoué!");
+                        EditorApplication.Exit(1);
+                    }
+                }
+                catch (Exception e) {
+                    Debug.LogError("Exception pendant le build: " + e.ToString());
+                    EditorApplication.Exit(1);
+                }
+            }
+            
+            static string GetEnvironmentVariable(string name, string defaultValue)
+            {
+                string value = Environment.GetEnvironmentVariable(name);
+                if (string.IsNullOrEmpty(value))
+                {
+                    return defaultValue;
+                }
+                return value;
+            }
+            
+            static string[] GetScenePaths(string scenesInput)
+            {
+                List<string> scenes = new List<string>();
+                
+                // Si des scènes spécifiques sont définies, les utiliser
+                if (!string.IsNullOrEmpty(scenesInput))
+                {
+                    string[] inputScenes = scenesInput.Split(',');
+                    foreach (string scene in inputScenes)
+                    {
+                        scenes.Add(scene.Trim());
+                    }
+                }
+                // Sinon, utiliser les scènes par défaut
+                else
+                {
+                    // Ajouter toutes les scènes enabled dans le build settings
+                    foreach (EditorBuildSettingsScene scene in EditorBuildSettings.scenes)
+                    {
+                        if (scene.enabled)
+                        {
+                            scenes.Add(scene.path);
+                        }
+                    }
+                    
+                    // Si aucune scène n'est enabled, ajouter les scènes par défaut
+                    if (scenes.Count == 0)
+                    {
+                        scenes.Add("Assets/Scenes/MainMenu.unity");
+                        scenes.Add("Assets/Scenes/Level1.unity");
+                        scenes.Add("Assets/Scenes/Level2.unity");
+                    }
+                }
+                
+                // Afficher les scènes trouvées dans le log
+                Debug.Log("Scènes incluses dans le build:");
+                foreach (string scene in scenes)
+                {
+                    Debug.Log("- " + scene);
+                }
+                
+                return scenes.ToArray();
+            }
+        }
+        EOF
+        
+        echo "Script de build créé avec succès à Assets/Editor/AutoBuildScript.cs"
+        
+    - name: Build Unity Project
+      shell: bash
+      run: |
+        # Définir les variables d'environnement basées sur les inputs
+        export OUTPUT_NAME="${{ inputs.output_name }}"
+        export BUNDLE_ID="${{ inputs.bundle_id }}"
+        export SCENES="${{ inputs.scenes }}"
+        
+        # Créer les répertoires nécessaires
+        mkdir -p "${CLOUDBEES_WORKSPACE}/Builds/Android"
+        
+        # Exécuter Unity avec Docker
+        echo "Lancement du build Unity avec Docker..."
+        docker run --rm \
+          -v "${CLOUDBEES_WORKSPACE}:/project" \
+          -w /project \
+          -e OUTPUT_NAME \
+          -e BUNDLE_ID \
+          -e SCENES \
+          unityci/editor:${{ inputs.unity_version }} \
+          /opt/unity/Editor/Unity \
+            -batchmode \
+            -nographics \
+            -projectPath "/project" \
+            -logFile "/project/unity_build.log" \
+            -executeMethod AutoBuildScript.BuildAndroid \
+            -quit
+        
+        # Récupérer le code de sortie
+        BUILD_RESULT=$?
+        
+        # Afficher le log complet
+        if [ -f "${CLOUDBEES_WORKSPACE}/unity_build.log" ]; then
+          echo "=== Log de build Unity ==="
+          cat "${CLOUDBEES_WORKSPACE}/unity_build.log"
+          echo "======================="
+        else
+          echo "Aucun log de build trouvé"
+        fi
+        
+        # Vérifier si le build a réussi
+        if [ -f "${CLOUDBEES_WORKSPACE}/Builds/Android/${OUTPUT_NAME}" ]; then
+          echo "Build réussi! APK généré: ${CLOUDBEES_WORKSPACE}/Builds/Android/${OUTPUT_NAME}"
+          
+          # Copier l'APK dans le répertoire d'artefacts de CloudBees
+          mkdir -p "${CLOUDBEES_ARTIFACTS}" || true
+          cp "${CLOUDBEES_WORKSPACE}/Builds/Android/${OUTPUT_NAME}" "${CLOUDBEES_ARTIFACTS}/${OUTPUT_NAME}" || true
+          echo "APK copié vers ${CLOUDBEES_ARTIFACTS}/${OUTPUT_NAME}"
+        else
+          echo "Build échoué! Aucun APK généré."
+          exit 1
+        fi
+        
+        exit $BUILD_RESULT
