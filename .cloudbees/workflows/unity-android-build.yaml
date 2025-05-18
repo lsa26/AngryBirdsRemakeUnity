@@ -17,166 +17,62 @@ jobs:
           repository: lsa26/AngryBirdsRemakeUnity
           ref: main
 
-      - name: Prepare environment
-        uses: docker://ubuntu:20.04
+      - name: Build with Unity in custom container
+        uses: docker://gableroux/unity3d:2020.1.1f1-android
         shell: bash
         run: |
-          # Installation des dépendances nécessaires
-          apt-get update && apt-get install -y libglu1-mesa-dev libxi-dev libxrandr-dev libxcursor-dev libxinerama-dev
-
-          # Création des répertoires nécessaires avec bonnes permissions
-          mkdir -p "${CLOUDBEES_WORKSPACE}/Builds"
-          mkdir -p "${CLOUDBEES_WORKSPACE}/Temp"
-          mkdir -p "${CLOUDBEES_WORKSPACE}/Library"
+          # Définir les variables d'environnement nécessaires
+          export UNITY_LICENSE_CONTENT=$UNITY_LICENSE
+          export UNITY_USERNAME=$UNITY_USERNAME
+          export UNITY_PASSWORD=$UNITY_PASSWORD
           
-          # Réparation des permissions
-          chmod -R 777 "${CLOUDBEES_WORKSPACE}"
+          # Activer la licence Unity (peut être nécessaire selon l'image)
+          echo "Activation de la licence Unity..."
+          echo "$UNITY_LICENSE_CONTENT" > /tmp/unity3d.ulf
+          xvfb-run --auto-servernum --server-args='-screen 0 640x480x24' \
+            /opt/Unity/Editor/Unity -batchmode -nographics -logFile /tmp/unity-activation.log \
+            -quit -manualLicenseFile /tmp/unity3d.ulf || true
           
-          # Vérification des scripts
-          echo "Vérification des scripts dans le repo..."
-          ls -la "${CLOUDBEES_WORKSPACE}/Assets/Editor/" || echo "Dossier Editor non trouvé"
-          test -f "${CLOUDBEES_WORKSPACE}/Assets/Editor/BuildScript.cs" || { echo "BuildScript.cs manquant!"; exit 1; }
-          test -f "${CLOUDBEES_WORKSPACE}/Assets/Editor/SetupAndroidBuild.cs" || { echo "SetupAndroidBuild.cs manquant!"; exit 1; }
+          # Afficher la structure du projet
+          echo "Structure du projet Unity :"
+          find "${CLOUDBEES_WORKSPACE}" -type f -name "*.unity" | sort
+          find "${CLOUDBEES_WORKSPACE}" -type f -name "*.cs" | grep "Editor" | sort
           
-          # Afficher l'espace disponible et utilisé
-          df -h
-
-      # Étape de diagnostic pour vérifier l'environnement
-      - name: Diagnostic environment
-        uses: docker://unityci/editor:ubuntu-2020.1.1f1-android-0.3.0
-        shell: bash
-        run: |
-          # Création du répertoire runtime avec bonnes permissions
-          mkdir -p /tmp/unity_runtime
-          chmod 777 /tmp/unity_runtime
+          # Création des répertoires nécessaires
+          mkdir -p "${CLOUDBEES_WORKSPACE}/Builds/Android"
           
-          # Configuration variables d'environnement
-          export XDG_RUNTIME_DIR="/tmp/unity_runtime"
-          export UNITY_HOME="/opt/unity"
-          export HOME="/tmp/unity_home"
-          
-          # Créer un dossier home temporaire
-          mkdir -p $HOME
-          chmod 777 $HOME
-          
-          # Vérifier la version d'Unity et ses capacités
-          echo "Version d'Unity :"
-          unity-editor --version || true
-          
-          # Vérifier les dépendances de l'exécutable
-          ldd $(which unity-editor) || echo "Impossible de vérifier les dépendances"
-          
-          # Vérifier la structure du projet
-          cd "${CLOUDBEES_WORKSPACE}"
-          find . -type d -name "Assets" | xargs ls -la
-          find . -name "*.cs" | grep "Editor" | xargs cat
-
-      # Étape pour tester Unity sans lancer le build complet
-      - name: Test Unity
-        uses: docker://unityci/editor:ubuntu-2020.1.1f1-android-0.3.0
-        shell: bash
-        run: |
-          # Configuration de l'environnement
-          export XDG_RUNTIME_DIR="/tmp/unity_runtime"
-          export UNITY_HOME="/opt/unity"
-          export HOME="/tmp/unity_home"
-          
-          # Tester le démarrage d'Unity sans build complet
-          cd "${CLOUDBEES_WORKSPACE}"
-          unity-editor \
-            -quit \
-            -batchmode \
-            -nographics \
-            -projectPath "${CLOUDBEES_WORKSPACE}" \
-            -logFile /tmp/unity_test.log \
-            -noUpm
-          
-          # Afficher le log pour diagnostic
-          cat /tmp/unity_test.log || echo "Log introuvable"
-
-      # Étape de build séparée en plusieurs commandes
-      - name: Build with Unity
-        uses: docker://unityci/editor:ubuntu-2020.1.1f1-android-0.3.0
-        shell: bash
-        run: |
-          # Configuration de l'environnement
-          export XDG_RUNTIME_DIR="/tmp/unity_runtime"
-          export UNITY_HOME="/opt/unity"
-          export HOME="/tmp/unity_home"
-          export TMPDIR="/tmp/unity_temp"
-          
-          # Créer des dossiers temporaires
-          mkdir -p $TMPDIR
-          chmod 777 $TMPDIR
-          
-          # Changement de répertoire
-          cd "${CLOUDBEES_WORKSPACE}"
-          
-          echo "Préparation du projet Unity..."
-          # 1. D'abord, juste ouvrir le projet pour initialiser
-          unity-editor \
-            -quit \
-            -batchmode \
-            -nographics \
-            -noUpm \
-            -projectPath "${CLOUDBEES_WORKSPACE}" \
-            -logFile /tmp/unity_init.log
-          
-          # Attendre et vérifier le résultat
-          INIT_RESULT=$?
-          echo "Code de retour de l'initialisation: $INIT_RESULT"
-          cat /tmp/unity_init.log || echo "Log d'initialisation introuvable"
-          
-          # Si l'initialisation a réussi, continuer avec la configuration Android
-          if [ $INIT_RESULT -eq 0 ]; then
-            echo "Configuration du build Android..."
-            unity-editor \
-              -quit \
+          # Effectuer le build avec xvfb pour émuler un écran
+          echo "Démarrage du build Unity..."
+          xvfb-run --auto-servernum --server-args='-screen 0 1920x1080x24' \
+            /opt/Unity/Editor/Unity \
               -batchmode \
-              -nographics \
-              -noUpm \
               -projectPath "${CLOUDBEES_WORKSPACE}" \
-              -logFile /tmp/unity_setup.log \
-              -executeMethod SetupAndroidBuild.Setup
-            
-            SETUP_RESULT=$?
-            echo "Code de retour de la configuration: $SETUP_RESULT"
-            cat /tmp/unity_setup.log || echo "Log de configuration introuvable"
-            
-            # Si la configuration a réussi, lancer le build
-            if [ $SETUP_RESULT -eq 0 ]; then
-              echo "Exécution du build final..."
-              unity-editor \
-                -quit \
-                -batchmode \
-                -nographics \
-                -noUpm \
-                -projectPath "${CLOUDBEES_WORKSPACE}" \
-                -logFile /tmp/unity_build.log \
-                -executeMethod BuildScript.Build
-              
-              BUILD_RESULT=$?
-              echo "Code de retour du build: $BUILD_RESULT"
-              cat /tmp/unity_build.log || echo "Log de build introuvable"
-              
-              if [ $BUILD_RESULT -ne 0 ]; then
-                  echo "Build échoué avec le code de retour $BUILD_RESULT"
-                  exit 1
-              fi
-            else
-              echo "Configuration Android échouée"
-              exit 1
-            fi
+              -logFile "${CLOUDBEES_WORKSPACE}/unity_build.log" \
+              -executeMethod BuildScript.Build \
+              -quit
+          
+          # Vérifier le résultat et afficher le log
+          BUILD_RESULT=$?
+          if [ -f "${CLOUDBEES_WORKSPACE}/unity_build.log" ]; then
+            echo "Log de build Unity :"
+            cat "${CLOUDBEES_WORKSPACE}/unity_build.log"
           else
-            echo "Initialisation du projet échouée"
-            exit 1
+            echo "Fichier de log non trouvé"
           fi
           
-          # Vérification des fichiers générés
-          echo "Contenu du dossier Builds:"
-          find "${CLOUDBEES_WORKSPACE}/Builds" -type f -name "*.apk" || echo "Aucun APK trouvé"
+          # Vérifier si des APK ont été générés
+          find "${CLOUDBEES_WORKSPACE}/Builds" -name "*.apk" | while read apk; do
+            echo "APK généré: $apk"
+            ls -lh "$apk"
+          done
+          
+          # Retourner le code de sortie du build
+          exit $BUILD_RESULT
+        env:
+          UNITY_LICENSE: ${{secrets.UNITY_LICENSE}}
+          UNITY_USERNAME: ${{secrets.UNITY_USERNAME}}
+          UNITY_PASSWORD: ${{secrets.UNITY_PASSWORD}}
 
-      # Étape pour archiver les artéfacts
       - name: Archive Build
         uses: docker://ubuntu:20.04
         shell: bash
@@ -187,4 +83,5 @@ jobs:
             find "${CLOUDBEES_WORKSPACE}/Builds" -type f -name "*.apk"
           else
             echo "Aucun artéfact de build trouvé"
+            exit 1
           fi
