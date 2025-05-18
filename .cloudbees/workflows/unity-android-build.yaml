@@ -1,34 +1,89 @@
 apiVersion: automation.cloudbees.io/v1alpha1
 kind: workflow
-name: unity-android-build-diagnostic
+name: unity-android-build-alternative
 
 on:
+  push:
+    branches:
+      - 'main'
   workflow_dispatch:
 
 jobs:
-  diagnose:
+  build:
     steps:
-      - name: Docker image diagnostic
-        uses: docker://unityci/editor:2020.1.17f1-android-0.17.0
+      - name: Checkout
+        uses: https://github.com/cloudbees-io/checkout@v1
+        with:
+          repository: lsa26/AngryBirdsRemakeUnity
+          ref: main
+      
+      # Utiliser l'approche du Game CI avec la syntaxe correcte pour CloudBees
+      - name: Build with Unity using GameCI
+        uses: docker://game-ci/unity-builder:ubuntu-2020.1.17f1-android-0.17.0
         shell: bash
         run: |
-          echo "Information système:"
-          uname -a
-          cat /etc/os-release
+          # Afficher la version de l'image
+          echo "Image GameCI Unity Builder:"
+          cat /version.txt || echo "Version file not found"
           
-          echo "Recherche de l'installation Unity:"
-          find / -name "Unity" -type d 2>/dev/null || echo "Aucun répertoire Unity trouvé"
-          find / -name "unity" -type f 2>/dev/null || echo "Aucun exécutable unity trouvé"
+          # Explorer l'environnement
+          echo "Structure des répertoires Unity:"
+          find /opt -name "Unity" -type d 2>/dev/null || echo "Unity not found in /opt"
           
-          echo "Recherche de fichiers potentiellement liés à Unity:"
-          find / -name "*unity*" -type f 2>/dev/null | grep -v ".log" | head -20 || echo "Aucun fichier unity trouvé"
-          
-          echo "Liste des répertoires principaux:"
-          ls -la / || echo "Impossible de lister le contenu de /"
-          
-          echo "Liste du contenu de /opt (si disponible):"
-          if [ -d "/opt" ]; then
-            ls -la /opt/
+          # Vérifier l'emplacement de l'exécutable Unity
+          UNITY_EXECUTABLE=$(find /opt -name "Unity" -type f -executable 2>/dev/null | head -1)
+          if [ -n "$UNITY_EXECUTABLE" ]; then
+            echo "Exécutable Unity trouvé: $UNITY_EXECUTABLE"
           else
-            echo "/opt n'existe pas"
+            echo "Recherche plus large d'Unity:"
+            find / -name "Unity" -type f -executable 2>/dev/null | head -3
           fi
+          
+          # Préparer l'environnement pour le build
+          export BUILD_NAME="AngryBirdsRemake"
+          export BUILD_TARGET="Android"
+          export BUILD_PATH="${CLOUDBEES_WORKSPACE}/Builds/Android"
+          export PROJECT_PATH="${CLOUDBEES_WORKSPACE}"
+          
+          # Créer le répertoire de build
+          mkdir -p "$BUILD_PATH"
+          
+          # Afficher la structure du projet
+          echo "Structure du projet Unity:"
+          find "$PROJECT_PATH" -name "*.unity" | head -5
+          
+          # Exécuter le builder (selon la structure de l'image GameCI)
+          if [ -f "/entrypoint.sh" ]; then
+            echo "Exécution du script d'entrée GameCI..."
+            /entrypoint.sh
+          elif [ -n "$UNITY_EXECUTABLE" ]; then
+            echo "Exécution d'Unity directement..."
+            $UNITY_EXECUTABLE \
+              -batchmode \
+              -nographics \
+              -projectPath "$PROJECT_PATH" \
+              -logFile "$PROJECT_PATH/unity_build.log" \
+              -executeMethod BuildScript.Build \
+              -buildTarget Android \
+              -quit
+          else
+            echo "Impossible de trouver comment exécuter Unity dans cette image"
+            exit 1
+          fi
+          
+          # Vérifier les logs et résultats
+          if [ -f "$PROJECT_PATH/unity_build.log" ]; then
+            echo "Log de build Unity:"
+            cat "$PROJECT_PATH/unity_build.log"
+          fi
+          
+          # Vérifier les APK générés
+          echo "Recherche d'APK générés:"
+          find "$PROJECT_PATH" -name "*.apk" | while read apk; do
+            echo "APK trouvé: $apk"
+            ls -lh "$apk"
+          done
+        env:
+          UNITY_LICENSE: 'PERSONAL'
+          BUILD_TARGET: 'Android'
+          PROJECT_PATH: '${CLOUDBEES_WORKSPACE}'
