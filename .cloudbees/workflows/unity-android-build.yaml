@@ -6,7 +6,7 @@ on:
   push:
     branches:
       - 'main'
-  workflow_dispatch:  # Permet de lancer manuellement le workflow
+  workflow_dispatch:
 
 jobs:
   build:
@@ -17,40 +17,83 @@ jobs:
           repository: lsa26/AngryBirdsRemakeUnity
           ref: main
 
-      - name: Verify scripts
+      - name: Prepare environment
         uses: docker://ubuntu:20.04
         shell: bash
         run: |
+          # Création des répertoires nécessaires
+          mkdir -p "${CLOUDBEES_WORKSPACE}/Builds"
+          mkdir -p "${CLOUDBEES_WORKSPACE}/Temp"
+          mkdir -p "${CLOUDBEES_WORKSPACE}/Library"
+          
+          # Vérification des scripts
           echo "Vérification des scripts dans le repo..."
-          ls -la "${CLOUDBEES_WORKSPACE}/Assets/Editor/"
+          ls -la "${CLOUDBEES_WORKSPACE}/Assets/Editor/" || echo "Dossier Editor non trouvé"
           test -f "${CLOUDBEES_WORKSPACE}/Assets/Editor/BuildScript.cs" || { echo "BuildScript.cs manquant!"; exit 1; }
           test -f "${CLOUDBEES_WORKSPACE}/Assets/Editor/SetupAndroidBuild.cs" || { echo "SetupAndroidBuild.cs manquant!"; exit 1; }
+          
+          # Afficher l'espace disponible et utilisé
+          df -h
+          
+          # Afficher les permissions du répertoire de travail
+          ls -la "${CLOUDBEES_WORKSPACE}"
 
       - name: Build with Unity
         uses: docker://unityci/editor:ubuntu-2020.1.1f1-android-0.3.0
         shell: bash
         run: |
-          # Configuration de Unity
+          # Définir les variables d'environnement
+          export XDG_RUNTIME_DIR="/tmp/unity_runtime"
+          export UNITY_HOME="/opt/unity"
+          
+          # Créer des dossiers temporaires
+          mkdir -p /tmp/unity_runtime
+          chmod 777 /tmp/unity_runtime
+          
+          # Afficher la version d'Unity
+          echo "Version d'Unity :"
+          unity-editor --version || echo "Impossible d'afficher la version d'Unity"
+          
+          # Afficher l'environnement
+          echo "Environnement :"
+          env
+          
+          # Changement de répertoire
+          cd "${CLOUDBEES_WORKSPACE}"
+          
+          # Afficher le contenu du répertoire de travail
+          echo "Contenu du répertoire de travail :"
+          ls -la
+          
+          echo "Contenu du répertoire Assets :"
+          ls -la Assets/
+          
+          echo "Contenu du répertoire Assets/Editor :"
+          ls -la Assets/Editor/
+          
+          # Exécution du build Unity avec plus de détails et sans capturer les logs (pour voir immédiatement les erreurs)
           echo "Démarrage du build Unity..."
           
-          # Exécution du build Unity
+          # Option 1: Commande de base
           unity-editor \
             -quit \
             -batchmode \
             -projectPath "${CLOUDBEES_WORKSPACE}" \
-            -executeMethod BuildScript.Build \
-            -logFile unity_build.log
-          
+            -logFile /tmp/unity_build.log \
+            -executeMethod BuildScript.Build
+            
           # Vérification du résultat du build
           BUILD_RESULT=$?
+          echo "Code de retour: $BUILD_RESULT"
+          
+          # Afficher le log de Unity
+          echo "Contenu du log Unity :"
+          cat /tmp/unity_build.log || echo "Log introuvable"
+          
           if [ $BUILD_RESULT -ne 0 ]; then
-              echo "Build failed! Showing log:"
-              cat unity_build.log || echo "Log not found"
+              echo "Build échoué avec le code de retour $BUILD_RESULT"
               exit 1
           fi
-          
-          echo "Build log:"
-          cat unity_build.log || echo "Log file not found"
           
           # Vérification des fichiers générés
           echo "Contenu du dossier Builds:"
