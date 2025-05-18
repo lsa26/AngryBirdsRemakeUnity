@@ -1,6 +1,6 @@
 apiVersion: automation.cloudbees.io/v1alpha1
 kind: workflow
-name: unity-android-simple-build
+name: unity-android-build
 
 on:
   workflow_dispatch:
@@ -14,36 +14,33 @@ jobs:
           repository: lsa26/AngryBirdsRemakeUnity
           ref: main
       
-      - name: Build with Unity (simple approach)
+      - name: Build with Unity
         uses: docker://unityci/editor:ubuntu-2020.1.1f1-android-0.3.0
         shell: bash
         run: |
           # Créer les répertoires nécessaires
           mkdir -p "${CLOUDBEES_WORKSPACE}/Builds/Android"
           
-          # Vérifier si la licence Unity est nécessaire
-          echo "Configuration de la licence Unity..."
-          mkdir -p /root/.local/share/unity3d/Unity/
+          # Vérifier l'installation Unity
+          ls -la /opt/unity/Editor/
           
-          # Énumérer les scènes du projet
-          echo "Scènes du projet:"
-          find "${CLOUDBEES_WORKSPACE}/Assets" -name "*.unity" -type f
-          
-          # Exécuter Unity directement avec BuildPipeline en mode batch
-          echo "Exécution du build Unity simple..."
+          # Exécuter Unity avec le script de build
+          echo "Exécution du build Unity..."
           /opt/unity/Editor/Unity \
             -batchmode \
             -nographics \
             -projectPath "${CLOUDBEES_WORKSPACE}" \
-            -logFile "${CLOUDBEES_WORKSPACE}/unity_simple_build.log" \
-            -buildTarget Android \
-            -buildWindowsPlayer "${CLOUDBEES_WORKSPACE}/Builds/Android/AngryBirdsRemake.apk" \
-            -quit || true
+            -logFile "${CLOUDBEES_WORKSPACE}/unity_build.log" \
+            -executeMethod BuildScript.BuildAndroid \
+            -quit
+          
+          # Capture le code de sortie
+          BUILD_RESULT=$?
           
           # Afficher le log complet
-          if [ -f "${CLOUDBEES_WORKSPACE}/unity_simple_build.log" ]; then
+          if [ -f "${CLOUDBEES_WORKSPACE}/unity_build.log" ]; then
             echo "=== Log de build Unity ==="
-            cat "${CLOUDBEES_WORKSPACE}/unity_simple_build.log"
+            cat "${CLOUDBEES_WORKSPACE}/unity_build.log"
             echo "======================="
           else
             echo "Aucun log de build trouvé"
@@ -52,3 +49,13 @@ jobs:
           # Vérifier la sortie
           echo "Contenu du dossier de build:"
           find "${CLOUDBEES_WORKSPACE}/Builds" -type f | sort
+          
+          # Terminer avec le bon code de sortie
+          exit $BUILD_RESULT
+      
+      - name: Archive Android Build
+        if: success()
+        uses: https://github.com/cloudbees-io/store-artifacts@v1
+        with:
+          path: ${CLOUDBEES_WORKSPACE}/Builds/Android/AngryBirdsRemake.apk
+          name: AngryBirdsRemake.apk
