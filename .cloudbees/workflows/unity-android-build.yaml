@@ -8,66 +8,12 @@ on:
 jobs:
   build:
     steps:
-      - name: Checkout
-        uses: https://github.com/cloudbees-io/checkout@v1
+      - name: Build Unity Android Game
+        uses: ./unity-build-action  # Chemin vers l'action personnalisée
         with:
           repository: lsa26/AngryBirdsRemakeUnity
           ref: main
-      
-      
-      - name: Build with Unity
-        uses: docker://unityci/editor:ubuntu-2020.1.1f1-android-0.3.0
-        shell: bash
-        run: |
-          # Créer les répertoires nécessaires
-          mkdir -p "${CLOUDBEES_WORKSPACE}/Builds/Android"
-          
-          # Vérifier l'installation Unity
-          ls -la /opt/unity/Editor/
-          
-          # Exécuter Unity avec le script de build
-          echo "Exécution du build Unity..."
-          /opt/unity/Editor/Unity \
-            -batchmode \
-            -nographics \
-            -projectPath "${CLOUDBEES_WORKSPACE}" \
-            -logFile "${CLOUDBEES_WORKSPACE}/unity_build.log" \
-            -executeMethod BuildScript.BuildAndroid \
-            -quit
-          
-          # Capture le code de sortie
-          BUILD_RESULT=$?
-          
-          # Afficher le log complet
-          if [ -f "${CLOUDBEES_WORKSPACE}/unity_build.log" ]; then
-            echo "=== Log de build Unity ==="
-            cat "${CLOUDBEES_WORKSPACE}/unity_build.log"
-            echo "======================="
-          else
-            echo "Aucun log de build trouvé"
-          fi
-          
-          # Vérifier la sortie
-          echo "Contenu du dossier de build:"
-          find "${CLOUDBEES_WORKSPACE}/Builds" -type f | sort
-          
-          # Si le build a réussi, copier l'APK dans un emplacement facile à accéder
-          if [ -f "${CLOUDBEES_WORKSPACE}/Builds/Android/AngryBirdsRemake.apk" ]; then
-            echo "APK trouvé, copie dans le répertoire de sortie..."
-            # S'assurer que le répertoire artifacts existe dans CLOUDBEES_ARTIFACTS si défini
-            if [ -n "${CLOUDBEES_ARTIFACTS}" ]; then
-              mkdir -p "${CLOUDBEES_ARTIFACTS}"
-              cp "${CLOUDBEES_WORKSPACE}/Builds/Android/AngryBirdsRemake.apk" "${CLOUDBEES_ARTIFACTS}/AngryBirdsRemake.apk"
-              echo "APK copié vers ${CLOUDBEES_ARTIFACTS}/AngryBirdsRemake.apk"
-            else
-              echo "Variable CLOUDBEES_ARTIFACTS non définie, utilisation du répertoire de travail"
-              mkdir -p "${CLOUDBEES_WORKSPACE}/artifacts"
-              cp "${CLOUDBEES_WORKSPACE}/Builds/Android/AngryBirdsRemake.apk" "${CLOUDBEES_WORKSPACE}/artifacts/AngryBirdsRemake.apk"
-              echo "APK copié vers ${CLOUDBEES_WORKSPACE}/artifacts/AngryBirdsRemake.apk"
-            fi
-          else
-            echo "APK non trouvé dans ${CLOUDBEES_WORKSPACE}/Builds/Android/"
-          fi
-          
-          # Terminer avec le bon code de sortie
-          exit $BUILD_RESULT
+          unity_version: ubuntu-2020.1.1f1-android-0.3.0
+          output_name: AngryBirdsRemake.apk
+          bundle_id: com.yourgame.angrybirdsremake
+          scenes: Assets/Scenes/MainMenu.unity,Assets/Scenes/Level1.unity,Assets/Scenes/Level2.unity
