@@ -14,6 +14,7 @@ jobs:
           repository: lsa26/AngryBirdsRemakeUnity
           ref: main
       
+      
       - name: Build with Unity
         uses: docker://unityci/editor:ubuntu-2020.1.1f1-android-0.3.0
         shell: bash
@@ -50,12 +51,23 @@ jobs:
           echo "Contenu du dossier de build:"
           find "${CLOUDBEES_WORKSPACE}/Builds" -type f | sort
           
+          # Si le build a réussi, copier l'APK dans un emplacement facile à accéder
+          if [ -f "${CLOUDBEES_WORKSPACE}/Builds/Android/AngryBirdsRemake.apk" ]; then
+            echo "APK trouvé, copie dans le répertoire de sortie..."
+            # S'assurer que le répertoire artifacts existe dans CLOUDBEES_ARTIFACTS si défini
+            if [ -n "${CLOUDBEES_ARTIFACTS}" ]; then
+              mkdir -p "${CLOUDBEES_ARTIFACTS}"
+              cp "${CLOUDBEES_WORKSPACE}/Builds/Android/AngryBirdsRemake.apk" "${CLOUDBEES_ARTIFACTS}/AngryBirdsRemake.apk"
+              echo "APK copié vers ${CLOUDBEES_ARTIFACTS}/AngryBirdsRemake.apk"
+            else
+              echo "Variable CLOUDBEES_ARTIFACTS non définie, utilisation du répertoire de travail"
+              mkdir -p "${CLOUDBEES_WORKSPACE}/artifacts"
+              cp "${CLOUDBEES_WORKSPACE}/Builds/Android/AngryBirdsRemake.apk" "${CLOUDBEES_WORKSPACE}/artifacts/AngryBirdsRemake.apk"
+              echo "APK copié vers ${CLOUDBEES_WORKSPACE}/artifacts/AngryBirdsRemake.apk"
+            fi
+          else
+            echo "APK non trouvé dans ${CLOUDBEES_WORKSPACE}/Builds/Android/"
+          fi
+          
           # Terminer avec le bon code de sortie
           exit $BUILD_RESULT
-      
-      - name: Archive Android Build
-        if: success()
-        uses: https://github.com/cloudbees-io/store-artifacts@v1
-        with:
-          path: ${CLOUDBEES_WORKSPACE}/Builds/Android/AngryBirdsRemake.apk
-          name: AngryBirdsRemake.apk
