@@ -1,6 +1,6 @@
 apiVersion: automation.cloudbees.io/v1alpha1
 kind: workflow
-name: unity-android-build
+name: unity-android-build-alternative
 
 on:
   push:
@@ -16,61 +16,14 @@ jobs:
         with:
           repository: lsa26/AngryBirdsRemakeUnity
           ref: main
-
-      - name: Build with Unity in custom container
-        uses: docker://unityci/editor:2020.1.17f1-android-0.17.0
-        shell: bash
-        run: |
-          # Augmenter les limites de mémoire pour les processus
-          ulimit -v unlimited
-          ulimit -m unlimited
-          
-          # Créer un répertoire pour les builds
-          mkdir -p "${CLOUDBEES_WORKSPACE}/Builds/Android"
-          
-          # Configuration plus robuste de xvfb
-          export DISPLAY=:99
-          Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
-          sleep 5
-          
-          # Tester l'installation Unity
-          echo "Vérification de l'installation Unity..."
-          ls -la /opt/Unity/Editor/
-          
-          # Essayer d'exécuter Unity avec moins d'options pour diagnostiquer
-          echo "Test de démarrage Unity..."
-          /opt/Unity/Editor/Unity -batchmode -logFile /tmp/unity-test.log -quit || true
-          
-          # Vérifier le log
-          if [ -f "/tmp/unity-test.log" ]; then
-            echo "Log de test Unity :"
-            cat /tmp/unity-test.log
-          fi
-          
-          # Afficher la structure du projet
-          echo "Structure du projet Unity :"
-          find "${CLOUDBEES_WORKSPACE}" -type f -name "*.unity" | head -5
-          
-          # Effectuer le build Unity avec plus de verbosité et des options simplifiées
-          echo "Démarrage du build Unity..."
-          /opt/Unity/Editor/Unity \
-            -batchmode \
-            -nographics \
-            -logFile "${CLOUDBEES_WORKSPACE}/unity_build.log" \
-            -projectPath "${CLOUDBEES_WORKSPACE}" \
-            -executeMethod BuildScript.Build \
-            -quit || true
-          
-          # Vérifier le résultat et afficher le log
-          if [ -f "${CLOUDBEES_WORKSPACE}/unity_build.log" ]; then
-            echo "Log de build Unity :"
-            cat "${CLOUDBEES_WORKSPACE}/unity_build.log"
-          else
-            echo "Fichier de log non trouvé"
-          fi
-          
-          # Vérifier si des APK ont été générés
-          find "${CLOUDBEES_WORKSPACE}/Builds" -name "*.apk" | while read apk; do
-            echo "APK généré: $apk"
-            ls -lh "$apk"
-          done
+      
+      # Utiliser l'approche du Game CI
+      - name: Build with Unity using GameCI
+        uses: docker://game-ci/unity-builder:ubuntu-2020.1.17f1-android-0.17.0
+        with:
+          projectPath: "${CLOUDBEES_WORKSPACE}"
+          targetPlatform: Android
+          buildName: AngryBirdsRemake
+          buildMethod: BuildScript.Build
+        env:
+          UNITY_LICENSE: 'PERSONAL'
