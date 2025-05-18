@@ -26,11 +26,14 @@ jobs:
           test -f "${CLOUDBEES_WORKSPACE}/Assets/Editor/BuildScript.cs" || { echo "BuildScript.cs manquant!"; exit 1; }
           test -f "${CLOUDBEES_WORKSPACE}/Assets/Editor/SetupAndroidBuild.cs" || { echo "SetupAndroidBuild.cs manquant!"; exit 1; }
 
-      - name: Build Android with Unity
+      - name: Build with Unity
         uses: docker://unityci/editor:ubuntu-2020.1.1f1-android-0.3.0
         shell: bash
         run: |
           # Configuration de Unity
+          echo "Démarrage du build Unity..."
+          
+          # Exécution du build Unity
           unity-editor \
             -quit \
             -batchmode \
@@ -38,7 +41,9 @@ jobs:
             -executeMethod BuildScript.Build \
             -logFile unity_build.log
           
-          if [ $? -ne 0 ]; then
+          # Vérification du résultat du build
+          BUILD_RESULT=$?
+          if [ $BUILD_RESULT -ne 0 ]; then
               echo "Build failed! Showing log:"
               cat unity_build.log || echo "Log not found"
               exit 1
@@ -47,24 +52,6 @@ jobs:
           echo "Build log:"
           cat unity_build.log || echo "Log file not found"
           
-          # Vérifie si le build a généré un APK
-          if [ ! -d "${CLOUDBEES_WORKSPACE}/Builds" ]; then
-              echo "Le dossier Builds n'existe pas!"
-              exit 1
-          fi
-          
-          ls -la "${CLOUDBEES_WORKSPACE}/Builds/"
-      
-      - name: Upload APK artifacts
-        id: upload-apk
-        uses: https://github.com/cloudbees-io/file-upload-action@v1
-        with:
-          path: Builds/*.apk
-          name: android-build
-          
-      - name: Upload log artifacts
-        id: upload-logs
-        uses: https://github.com/cloudbees-io/file-upload-action@v1
-        with:
-          path: unity_build.log
-          name: build-logs
+          # Vérification des fichiers générés
+          echo "Contenu du dossier Builds:"
+          ls -la "${CLOUDBEES_WORKSPACE}/Builds/" || echo "Le dossier Builds n'existe pas"
