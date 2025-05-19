@@ -15,19 +15,20 @@ jobs:
 
       - name: Activate Unity License
         uses: docker://unityci/editor:ubuntu-6000.0.49f1-android-3.1.0
-        shell: sh
+        shell: bash
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         run: |
-          echo "🔑 Activation de la licence Unity (gratuite)..."
+          echo "🔑 Activating Unity license for CI..."
+          xvfb-run --auto-servernum --server-args='-screen 0 640x480x24' \
           unity-editor \
-            -batchmode \
-            -nographics \
-            -username "$UNITY_EMAIL" \
-            -password "$UNITY_PASSWORD" \
-            -logFile activate.log \
-            -quit || (cat activate.log && exit 1)
+          -batchmode \
+          -nographics \
+          -username "$UNITY_EMAIL" \
+          -password "$UNITY_PASSWORD" \
+          -logFile /cloudbees/home/activate.log \
+          -quit
 
       - name: Build Unity APK
         uses: docker://unityci/editor:ubuntu-6000.0.49f1-android-3.1.0
