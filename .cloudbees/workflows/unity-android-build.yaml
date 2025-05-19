@@ -1,19 +1,21 @@
 apiVersion: automation.cloudbees.io/v1alpha1
 kind: workflow
-name: unity-android-build
+name: Unity Version Check
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - 'main'
 
 jobs:
-  build:
+  unity-version:
     steps:
-      - name: Build Unity Android Game
-        uses: ./unity-build-action  # Chemin vers l'action personnalisée
-        with:
-          repository: lsa26/AngryBirdsRemakeUnity
-          ref: main
-          unity_version: ubuntu-2020.1.1f1-android-0.3.0
-          output_name: AngryBirdsRemake.apk
-          bundle_id: com.yourgame.angrybirdsremake
-          scenes: Assets/Scenes/MainMenu.unity,Assets/Scenes/Level1.unity,Assets/Scenes/Level2.unity
+      - name: Checkout code
+        uses: cloudbees-io/checkout@v1
+
+      - name: Check Unity Version
+        uses: docker://unityci/editor:ubuntu-2022.3.15f1-base-0.16.1
+        shell: sh
+        run: |
+          echo "🔍 Unity Version:"
+          unity-editor --version
