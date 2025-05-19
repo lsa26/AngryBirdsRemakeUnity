@@ -14,7 +14,7 @@ jobs:
         uses: cloudbees-io/checkout@v1
         
       - name: Activate Unity license (Unity Personal)
-        uses: docker://unityci/editor:${{ vars.UNITY_VERSION }}-android-3
+        uses: docker://unityci/editor:6000.0.49f1-android-3
         shell: sh
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
@@ -29,7 +29,7 @@ jobs:
             -logFile /dev/stdout
 
       - name: Build Android APK
-        uses: docker://unityci/editor:${{ vars.$UNITY_VERSION}}-android-3
+        uses: docker://unityci/editor:6000.0.49f1-android-3
         shell: sh
         run: |
           mkdir -p Builds/Android
@@ -42,7 +42,7 @@ jobs:
             -logFile build.log || (cat build.log && exit 1)
 
       - name: Return Unity license (optional)
-        uses: docker://unityci/editor:${{ vars.$UNITY_VERSION}}-android-3
+        uses: docker://unityci/editor:6000.0.49f1-android-3
         shell: sh
         run: |
           unity-editor -batchmode -nographics -quit -returnlicense || true
