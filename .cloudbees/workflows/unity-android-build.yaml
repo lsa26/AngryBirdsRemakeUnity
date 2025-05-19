@@ -33,9 +33,3 @@ jobs:
           -logFile build.log \
           -executeMethod BuildScript.Build \
           -quit || (cat build.log && exit 1)
-    
-      - name: Upload APK
-        uses: cloudbees-io/artifact-upload@v1
-        with:
-          name: android-apk
-          path: Builds/Android/mygame.apk
