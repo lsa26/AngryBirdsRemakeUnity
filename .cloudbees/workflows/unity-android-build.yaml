@@ -29,6 +29,15 @@ jobs:
             find / -name "Unity_v*.alf" -type f 2>/dev/null | head -n 1 | xargs -I{} cp {} unity_lic_request/ || echo "⚠️ Aucun fichier ALF trouvé"
           fi
           
+      - name: Apply Unity license for build
+        uses: docker://unityci/editor:ubuntu-6000.0.49f1-android-3.1.0
+        shell: sh
+        run: |
+          echo "📄 Application de la licence Unity..."
+          mkdir -p ~/.local/share/unity3d/Unity/
+          echo "${{ secrets.UNITY_LICENSE }}" | base64 -d > ~/.local/share/unity3d/Unity/Unity_lic.ulf
+          echo "✅ Licence Unity configurée"
+          
       - name: Build Unity APK
         uses: docker://unityci/editor:ubuntu-6000.0.49f1-android-3.1.0
         shell: sh
