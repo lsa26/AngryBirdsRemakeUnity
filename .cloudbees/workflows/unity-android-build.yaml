@@ -1,53 +1,49 @@
 apiVersion: automation.cloudbees.io/v1alpha1
 kind: workflow
-name: Unity Android Build1
+name: Unity Android Build
 
 on:
   push:
     branches:
-      - 'main'
+      - "main"
 
 jobs:
   build-unity-apk:
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: cloudbees-io/checkout@v1
+        
+      - name: Activate Unity license (Unity Personal)
+        uses: docker://unityci/editor:${{ env.UNITY_VERSION }}-android-3
+        shell: sh
+        env:
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL: ""  # empty for Unity Personal
+          UNITY_VERSION: $UNITY_VERSION
+        run: |
+          unity-editor \
+            -batchmode -nographics -quit \
+            -username "$UNITY_EMAIL" \
+            -password "$UNITY_PASSWORD" \
+            -serial "$UNITY_SERIAL" \
+            -logFile /dev/stdout
 
-      - name: Generate Unity license request (.alf)
-        uses: docker://unityci/editor:ubuntu-6000.0.49f1-android-3.1.0
+      - name: Build Android APK
+        uses: docker://unityci/editor:${{ env.UNITY_VERSION }}-android-3
         shell: sh
         run: |
-          echo "📄 Génération du fichier .alf..."
-          mkdir -p unity_lic_request
-          unity-editor -batchmode -nographics -createManualActivationFile -logFile /dev/stdout || true
-          # Le fichier est sauvegardé directement dans le répertoire de travail
-          if [ -f /cloudbees/workspace/Unity_v*.alf ]; then
-            cp /cloudbees/workspace/Unity_v*.alf unity_lic_request/
-            echo "✅ Fichier ALF copié avec succès dans unity_lic_request/"
-          else
-            # Recherche plus large au cas où
-            find / -name "Unity_v*.alf" -type f 2>/dev/null | head -n 1 | xargs -I{} cp {} unity_lic_request/ || echo "⚠️ Aucun fichier ALF trouvé"
-          fi
-          
-      - name: Apply Unity license for build
-        uses: docker://unityci/editor:ubuntu-6000.0.49f1-android-3.1.0
-        shell: sh
-        run: |
-          echo "📄 Application de la licence Unity..."
-          mkdir -p ~/.local/share/unity3d/Unity/
-          echo "${{ secrets.UNITY_LICENSE }}" | base64 -d > ~/.local/share/unity3d/Unity/Unity_lic.ulf
-          echo "✅ Licence Unity configurée"
-          
-      - name: Build Unity APK
-        uses: docker://unityci/editor:ubuntu-6000.0.49f1-android-3.1.0
-        shell: sh
-        run: |
-          echo "📦 Build APK..."
           mkdir -p Builds/Android
           unity-editor \
             -batchmode \
             -nographics \
+            -quit \
             -projectPath . \
             -executeMethod BuildScript.Build \
-            -logFile build.log \
-            -quit || (cat build.log && exit 1)
+            -logFile build.log || (cat build.log && exit 1)
+
+      - name: Return Unity license (optional)
+        uses: docker://unityci/editor:${{ env.UNITY_VERSION }}-android-3
+        shell: sh
+        run: |
+          unity-editor -batchmode -nographics -quit -returnlicense || true
