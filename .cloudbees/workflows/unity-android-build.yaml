@@ -30,7 +30,7 @@ jobs:
             -logFile /dev/stdout
 
       - name: Build Android APK
-        uses: docker://unityci/editor:${{ env.UNITY_VERSION }}-android-3
+        uses: docker://unityci/editor:${{ vars.$UNITY_VERSION}}-android-3
         shell: sh
         run: |
           mkdir -p Builds/Android
@@ -43,7 +43,7 @@ jobs:
             -logFile build.log || (cat build.log && exit 1)
 
       - name: Return Unity license (optional)
-        uses: docker://unityci/editor:${{ env.UNITY_VERSION }}-android-3
+        uses: docker://unityci/editor:${{ vars.$UNITY_VERSION}}-android-3
         shell: sh
         run: |
           unity-editor -batchmode -nographics -quit -returnlicense || true
