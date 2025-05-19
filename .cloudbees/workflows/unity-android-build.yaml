@@ -19,3 +19,24 @@ jobs:
         run: |
           echo "🔍 Unity Version:"
           unity-editor --version
+          
+      - name: Build Unity APK
+        uses: docker://unityci/editor:ubuntu-6000.0.49f1-android-3.1.0
+        shell: sh
+        run: |
+          echo "📦 Build APK..."
+          mkdir -p Builds/Android
+          unity-editor \
+          -batchmode \
+          -nographics \
+          -projectPath . \
+          -logFile build.log \
+          -executeMethod BuildScript.Build \
+          -quit || (cat build.log && exit 1)
+    
+      - name: Upload APK
+        uses: cloudbees-io/artifact@v1
+        with:
+          name: android-apk
+          path: Builds/Android/mygame.apk
+
