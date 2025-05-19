@@ -1,6 +1,6 @@
 apiVersion: automation.cloudbees.io/v1alpha1
 kind: workflow
-name: Unity Version Check
+name: Unity Android Build
 
 on:
   push:
@@ -8,31 +8,37 @@ on:
       - 'main'
 
 jobs:
-  unity-version:
+  build-unity-apk:
     steps:
       - name: Checkout code
         uses: cloudbees-io/checkout@v1
 
-      - name: Check Unity Version
-        uses: docker://unityci/editor:ubuntu-6000.0.49f1-android-3.1.0
-        shell: sh
-        run: |
-          echo "🔍 Unity Version:"
-          unity-editor --version
-          
-      - name: Build Unity APK
+      - name: Activate Unity License
         uses: docker://unityci/editor:ubuntu-6000.0.49f1-android-3.1.0
         shell: sh
         env:
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         run: |
+          echo "🔑 Activation de la licence Unity (gratuite)..."
+          unity-editor \
+            -batchmode \
+            -nographics \
+            -username "$UNITY_EMAIL" \
+            -password "$UNITY_PASSWORD" \
+            -logFile activate.log \
+            -quit || (cat activate.log && exit 1)
+
+      - name: Build Unity APK
+        uses: docker://unityci/editor:ubuntu-6000.0.49f1-android-3.1.0
+        shell: sh
+        run: |
           echo "📦 Build APK..."
           mkdir -p Builds/Android
           unity-editor \
-          -batchmode \
-          -nographics \
-          -projectPath . \
-          -logFile build.log \
-          -executeMethod BuildScript.Build \
-          -quit || (cat build.log && exit 1)
+            -batchmode \
+            -nographics \
+            -projectPath . \
+            -executeMethod BuildScript.Build \
+            -logFile build.log \
+            -quit || (cat build.log && exit 1)
