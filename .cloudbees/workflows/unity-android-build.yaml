@@ -20,8 +20,14 @@ jobs:
           echo "📄 Génération du fichier .alf..."
           mkdir -p unity_lic_request
           unity-editor -batchmode -nographics -createManualActivationFile -logFile /dev/stdout || true
-          # Le fichier est généralement nommé Unity_v6000.x.alf
-          find ~/.local/share/unity3d -name '*.alf' -exec cp {} unity_lic_request/ \;
+          # Le fichier est sauvegardé directement dans le répertoire de travail
+          if [ -f /cloudbees/workspace/Unity_v*.alf ]; then
+            cp /cloudbees/workspace/Unity_v*.alf unity_lic_request/
+            echo "✅ Fichier ALF copié avec succès dans unity_lic_request/"
+          else
+            # Recherche plus large au cas où
+            find / -name "Unity_v*.alf" -type f 2>/dev/null | head -n 1 | xargs -I{} cp {} unity_lic_request/ || echo "⚠️ Aucun fichier ALF trouvé"
+          fi
           
       - name: Build Unity APK
         uses: docker://unityci/editor:ubuntu-6000.0.49f1-android-3.1.0
