@@ -17,7 +17,7 @@ jobs:
         uses: docker://unityci/editor:ubuntu-6000.0.49f1-android-3.1.0
         shell: sh
         env:
-          UNITY_USERNAME: ${{ secrets.UNITY_USERNAME }}
+          UNITY_USERNAME: ${{ secrets.UNITY_EMAIL}}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         run: |
           unity-editor -batchmode -nographics -quit -logFile /dev/stdout \
